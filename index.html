@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Intake Call Simulation | Maria (You) & Sarah (Client)</title>
+<style>
+  :root{
+    --navy:#162D50; --burgundy:#801326; --ink:#0E1116; --bg:#F7F8FA; --card:#FFFFFF;
+    --muted:#EEF0F3; --ok:#1B7F5F; --warn:#B45309; --danger:#9B1C1C; --shadow:0 6px 18px rgba(0,0,0,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0; background:var(--bg); color:var(--ink);
+       font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif}
+  .wrap{max-width:1100px; margin:0 auto; padding:18px}
+  .hdr{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px}
+  .title{display:flex; align-items:center; gap:10px}
+  .dot{width:10px; height:10px; border-radius:999px; background:var(--burgundy)}
+  h1{font-size:22px; margin:0}
+  .card{background:var(--card); border-radius:16px; padding:16px; box-shadow:var(--shadow)}
+  .grid{display:grid; grid-template-columns: 2fr 1fr; gap:16px}
+  @media (max-width: 900px){ .grid{grid-template-columns: 1fr} }
+  .callbox{min-height:560px; display:flex; flex-direction:column}
+  .transcript{flex:1; overflow:auto; padding:12px; border:1px solid #e6e8ec; border-radius:12px; background:#fff}
+  .msg{display:flex; margin:8px 0}
+  .msg .bubble{max-width:80%; padding:10px 12px; border-radius:12px}
+  .maria .bubble{margin-left:auto; background:var(--navy); color:#fff; border-bottom-right-radius:4px}
+  .sarah .bubble{margin-right:auto; background:#f0f3f7; color:#111; border-bottom-left-radius:4px}
+  .controls{display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; align-items:center}
+  button{border:0; border-radius:12px; padding:10px 12px; font-weight:600; cursor:pointer}
+  .primary{background:var(--navy); color:#fff}
+  .ghost{background:#eef1f5}
+  .danger{background:var(--danger); color:#fff}
+  .ok{background:var(--ok); color:#fff}
+  .pill{border-radius:999px}
+  .hint{font-size:13px; opacity:.8; margin:8px 0 0 0}
+  .score{font-size:14px}
+  .score .row{display:flex; align-items:center; justify-content:space-between; border-bottom:1px dashed #e5e7eb; padding:6px 0}
+  .score .row:last-child{border-bottom:0}
+  .badge{font-size:12px; padding:2px 8px; border-radius:999px; background:#e5e7eb}
+  .good{background:#DCFCE7; color:#166534}
+  .bad{background:#FEE2E2; color:#991B1B}
+  .neutral{background:#E0E7FF; color:#3730A3}
+  .footnote{font-size:12px; opacity:.7; margin-top:10px}
+  .inputRow{display:flex; gap:8px; margin-top:8px}
+  input[type="text"]{flex:1; padding:10px 12px; border:1px solid #d9dee6; border-radius:10px}
+  select{border-radius:10px; padding:8px 10px; border:1px solid #d9dee6; background:#fff}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hdr">
+      <div class="title"><div class="dot"></div><h1>Intake Call Simulation</h1></div>
+      <div class="badge neutral">Mode: You = Maria (Case Manager) • Client = Sarah</div>
+    </div>
+    <div class="grid">
+      <div class="card callbox">
+        <div id="transcript" class="transcript" aria-live="polite"></div>
+        <div class="controls">
+          <button id="startBtn" class="primary pill">Start Call</button>
+          <button id="endBtn" class="danger pill" disabled>End Call</button>
+          <button id="micBtn" class="ok pill" disabled>🎙️ Use Microphone</button>
+          <button id="muteBtn" class="ghost pill" disabled>🔈 Mute Sarah</button>
+          <button id="kbToggle" class="ghost pill">⌨️ Use Keyboard Instead</button>
+          <label for="voiceSel" class="footnote" style="margin-left:auto">Sarah's voice:</label>
+          <select id="voiceSel" disabled></select>
+        </div>
+        <div id="kbArea" class="inputRow" style="display:none">
+          <input id="kbInput" type="text" placeholder="Speak or type as Maria (Case Manager)..." />
+          <button id="sendKb" class="primary pill">Send</button>
+        </div>
+        <p class="hint">Tip: Click <b>Start Call</b>, then use the mic or keyboard. Sarah responds based on what you ask and what you collect.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 6px 0">Scoring (auto‑updated)</h3>
+        <div id="score" class="score"></div>
+        <div class="footnote">Goal: Collect all required items during the call. End the call when ready to view final score.</div>
+      </div>
+    </div>
+  </div>
+<script>
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+const empatheticAcks = [
+  "I appreciate you taking the time to talk with me.",
+  "Thanks for walking me through this—I'm still a little shaken up.",
+  "Sure, I'm here. I can go through the questions with you."
+];
+const clarifiers = [
+  "Could you say that another way?",
+  "I think I missed part of that—could you repeat the question?",
+  "Sorry, can you clarify what you'd like me to share first?"
+];
+const readyToProceed = [
+  "Yes, I can do the intake now. What do you need from me?",
+  "I'm ready—go ahead with the questions.",
+  "That’s fine with me. Where should we start?"
+];
+
+function speak(text){
+  const u = new SpeechSynthesisUtterance(text);
+  window.speechSynthesis.speak(u);
+}
+function addMsg(role, text){
+  const t = document.getElementById('transcript');
+  const row = document.createElement('div');
+  row.className = `msg ${role}`;
+  row.innerHTML = `<div class="bubble">${text}</div>`;
+  t.appendChild(row);
+  t.scrollTop = t.scrollHeight;
+}
+document.getElementById('startBtn').onclick = ()=>{
+  addMsg('sarah',"Hi, this is Sarah. Thanks for taking my call.");
+  speak("Hi, this is Sarah. Thanks for taking my call.");
+};
+</script>
+</body>
+</html>
