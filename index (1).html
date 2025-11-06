@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Intake Call Simulation | Maria (You) & Sarah (Client)</title>
+<style>
+  :root{
+    --navy:#162D50; --burgundy:#801326; --ink:#0E1116; --bg:#F7F8FA; --card:#FFFFFF;
+    --muted:#EEF0F3; --ok:#1B7F5F; --warn:#B45309; --danger:#9B1C1C;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0; background:var(--bg); color:var(--ink);
+       font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif}
+  .wrap{max-width:1100px; margin:0 auto; padding:18px}
+  .hdr{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px}
+  .title{display:flex; align-items:center; gap:10px}
+  .dot{width:10px; height:10px; border-radius:999px; background:var(--burgundy)}
+  h1{font-size:22px; margin:0}
+  .card{background:var(--card); border-radius:16px; padding:16px; box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  .grid{display:grid; grid-template-columns: 2fr 1fr; gap:16px}
+  @media (max-width: 900px){ .grid{grid-template-columns: 1fr} }
+  .callbox{min-height:520px; display:flex; flex-direction:column}
+  .transcript{flex:1; overflow:auto; padding:12px; border:1px solid #e6e8ec; border-radius:12px; background:#fff}
+  .msg{display:flex; margin:8px 0}
+  .msg .bubble{max-width:80%; padding:10px 12px; border-radius:12px}
+  .maria .bubble{margin-left:auto; background:var(--navy); color:#fff; border-bottom-right-radius:4px}
+  .sarah .bubble{margin-right:auto; background:#f0f3f7; color:#111; border-bottom-left-radius:4px}
+  .meta{font-size:12px; opacity:.7; margin:2px 0 0 0}
+  .controls{display:flex; flex-wrap:wrap; gap:10px; margin-top:12px}
+  button{border:0; border-radius:12px; padding:10px 12px; font-weight:600; cursor:pointer}
+  .primary{background:var(--navy); color:#fff}
+  .ghost{background:#eef1f5}
+  .danger{background:var(--danger); color:#fff}
+  .ok{background:var(--ok); color:#fff}
+  .warn{background:var(--warn); color:#fff}
+  .pill{border-radius:999px}
+  .hint{font-size:13px; opacity:.8; margin:8px 0 0 0}
+  .score{font-size:14px}
+  .score .row{display:flex; align-items:center; justify-content:space-between; border-bottom:1px dashed #e5e7eb; padding:6px 0}
+  .score .row:last-child{border-bottom:0}
+  .badge{font-size:12px; padding:2px 8px; border-radius:999px; background:#e5e7eb}
+  .good{background:#DCFCE7; color:#166534}
+  .bad{background:#FEE2E2; color:#991B1B}
+  .neutral{background:#E0E7FF; color:#3730A3}
+  .footnote{font-size:12px; opacity:.7; margin-top:10px}
+  .inputRow{display:flex; gap:8px; margin-top:8px}
+  input[type="text"]{flex:1; padding:10px 12px; border:1px solid #d9dee6; border-radius:10px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hdr">
+      <div class="title"><div class="dot"></div><h1>Intake Call Simulation</h1></div>
+      <div class="badge neutral">Mode: You = Maria (Case Manager) • Client = Sarah</div>
+    </div>
+
+    <div class="grid">
+      <div class="card callbox">
+        <div id="transcript" class="transcript" aria-live="polite"></div>
+
+        <div class="controls">
+          <button id="startBtn" class="primary pill">Start Call</button>
+          <button id="endBtn" class="danger pill" disabled>End Call</button>
+          <button id="micBtn" class="ok pill" disabled>🎙️ Use Microphone</button>
+          <button id="muteBtn" class="ghost pill" disabled>🔈 Mute Sarah</button>
+          <button id="kbToggle" class="ghost pill">⌨️ Use Keyboard Instead</button>
+        </div>
+
+        <div id="kbArea" class="inputRow" style="display:none">
+          <input id="kbInput" type="text" placeholder="Speak or type as Maria (Case Manager)..." />
+          <button id="sendKb" class="primary pill">Send</button>
+        </div>
+
+        <p class="hint">Tip: Click <b>Start Call</b>, then use the mic or keyboard. Sarah responds based on what you ask and what you collect.</p>
+        <p class="footnote">If embedding in an iframe blocks the microphone, open this page in a new window.</p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 6px 0">Scoring (auto‑updated)</h3>
+        <div id="score" class="score"></div>
+        <div class="footnote">Goal: Collect all required items during the call. End the call when ready to view final score.</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ---------- Scenario Data (Sarah's ground truth) ---------- */
+const SARAH = {
+  name: "Sarah Mitchell",
+  spelling: "S A R A H, and Mitchell, M I T C H E L L",
+  dob: "October 26, 1985",
+  address: "123 Main Street, Providence, Rhode Island, 02904",
+  phone: "401-555-1234",
+  email: "sarah.mitchell@example.com",
+  marital: "single",
+  emergencyName: "Jessica Mitchell",
+  emergencyPhone: "401-555-5678",
+  narrative: "I was driving south on Broad Street. As I approached Elm Avenue, a car ran a red light and hit my front passenger side.",
+  police: "Yes, the police came and took a report.",
+  reportNumber: "I have a copy but not the number handy. I can text it after the call.",
+  witnesses: "I'm not sure. I think people saw it, but I didn't speak to them.",
+  injuries: "Neck stiffness and pain, low back pain, and bad headaches.",
+  rescue: "No, I went home.",
+  treatment: "I saw my primary doctor the next day. She prescribed pain meds and suggested physical therapy.",
+  workSchedule: "I work Monday through Friday, nine to five. Evenings or weekends work best.",
+  neuroReferral: "No referral yet.",
+  headStrike: "I hit my head on something but not sure what.",
+  headacheHistory: "I don't usually get headaches like this.",
+  pcpName: "(PCP name not provided)"
+};
+
+const REQUIRED = [
+  {key:"name", label:"Full name"},
+  {key:"dob", label:"Date of birth"},
+  {key:"address", label:"Address"},
+  {key:"phone", label:"Best contact number"},
+  {key:"email", label:"Email address"},
+  {key:"marital", label:"Marital status"},
+  {key:"emergencyName", label:"Emergency contact name"},
+  {key:"emergencyPhone", label:"Emergency contact phone"},
+  {key:"narrative", label:"Accident narrative"},
+  {key:"police", label:"Police at scene"},
+  {key:"reportNumber", label:"Police report number / will send"},
+  {key:"witnesses", label:"Witnesses"},
+  {key:"injuries", label:"Injuries described"},
+  {key:"rescue", label:"Rescue to hospital?"},
+  {key:"treatment", label:"Treatment to date"},
+  {key:"workSchedule", label:"Availability for PT"},
+  {key:"neuroReferral", label:"Neurologist referral discussed"},
+  {key:"headStrike", label:"Head strike?"},
+  {key:"headacheHistory", label:"Headache history?"},
+  {key:"pcpName", label:"PCP name"}
+];
+
+/* ---------- Simple Intent Matching ---------- */
+// Each intent looks for keywords in learner's last utterance and returns Sarah's response + which fields were collected.
+const intents = [
+  {
+    name:"greeting",
+    test: u => /\b(hi|hello|thanks for calling|this is maria|how may i help|how can i help|law|firm)\b/i.test(u),
+    reply: ()=>"Hi. My name is Sarah Mitchell and I was in a car accident. I need help.",
+    collect: []
+  },
+  {
+    name:"ask_name",
+    test: u => /\b(full )?name|who am i speaking|spell your name|can i have your name\b/i.test(u),
+    reply: ()=>`It's ${SARAH.name}. ${SARAH.spelling}.`,
+    collect: ["name"]
+  },
+  {
+    name:"ask_dob",
+    test: u => /\b(date of birth|dob|birthday)\b/i.test(u),
+    reply: ()=>`It's ${SARAH.dob}.`,
+    collect: ["dob"]
+  },
+  {
+    name:"ask_address",
+    test: u => /\b(address|where do you live|what is your address)\b/i.test(u),
+    reply: ()=>`It's ${SARAH.address}.`,
+    collect: ["address"]
+  },
+  {
+    name:"ask_phone",
+    test: u => /\b(best )?(contact )?(phone|number|cell)\b/i.test(u),
+    reply: ()=>`My cell is ${SARAH.phone}.`,
+    collect: ["phone"]
+  },
+  {
+    name:"ask_email",
+    test: u => /\b(email|e\-?mail)\b/i.test(u),
+    reply: ()=>`It's ${SARAH.email}.`,
+    collect: ["email"]
+  },
+  {
+    name:"ask_marital",
+    test: u => /\b(married|single|marital status|are you married|relationship status)\b/i.test(u),
+    reply: ()=>`I'm ${SARAH.marital}.`,
+    collect: ["marital"]
+  },
+  {
+    name:"ask_emergency",
+    test: u => /\b(emergency contact|someone we can reach|in case of emergency)\b/i.test(u),
+    reply: ()=>`My sister, ${SARAH.emergencyName}. Her number is ${SARAH.emergencyPhone}.`,
+    collect: ["emergencyName","emergencyPhone"]
+  },
+  {
+    name:"ask_narrative",
+    test: u => /\b(how.*accident.*occur|what happened|accident description|tell me.*happen|describe.*accident)\b/i.test(u),
+    reply: ()=>SARAH.narrative,
+    collect: ["narrative"]
+  },
+  {
+    name:"ask_police",
+    test: u => /\b(police|officer|report)\b/i.test(u) && !/\breport number|report #|case number\b/i.test(u),
+    reply: ()=>`${SARAH.police}`,
+    collect: ["police"]
+  },
+  {
+    name:"ask_report",
+    test: u => /\b(report number|report #|case number|do you have.*number)\b/i.test(u),
+    reply: ()=>`${SARAH.reportNumber}`,
+    collect: ["reportNumber"]
+  },
+  {
+    name:"ask_witnesses",
+    test: u => /\b(witness|anyone see|people see)\b/i.test(u),
+    reply: ()=>`${SARAH.witnesses}`,
+    collect: ["witnesses"]
+  },
+  {
+    name:"ask_injuries",
+    test: u => /\b(injur|hurt|pain|symptom|are you hurt|what.*injur)\b/i.test(u),
+    reply: ()=>`${SARAH.injuries}`,
+    collect: ["injuries"]
+  },
+  {
+    name:"ask_rescue",
+    test: u => /\b(rescue|ambulance|emt|go.*hospital.*scene)\b/i.test(u),
+    reply: ()=>`${SARAH.rescue}`,
+    collect: ["rescue"]
+  },
+  {
+    name:"ask_treatment",
+    test: u => /\b(treat|doctor|pcp|primary|seen.*doctor|medication)\b/i.test(u),
+    reply: ()=>`${SARAH.treatment}`,
+    collect: ["treatment"]
+  },
+  {
+    name:"ask_schedule",
+    test: u => /\b(schedule|availability|what time works|when can you|evening|weekend)\b/i.test(u),
+    reply: ()=>`${SARAH.workSchedule}`,
+    collect: ["workSchedule"]
+  },
+  {
+    name:"ask_neuro",
+    test: u => /\b(neuro|neurologist|headache.*referral)\b/i.test(u),
+    reply: ()=>`${SARAH.neuroReferral}`,
+    collect: ["neuroReferral"]
+  },
+  {
+    name:"ask_headstrike",
+    test: u => /\b(hit your head|strike your head|head.*hit)\b/i.test(u),
+    reply: ()=>`${SARAH.headStrike}`,
+    collect: ["headStrike"]
+  },
+  {
+    name:"ask_headache_history",
+    test: u => /\b(normally suffer from headaches|usual headaches|headache history|do you usually get headaches)\b/i.test(u),
+    reply: ()=>`${SARAH.headacheHistory}`,
+    collect: ["headacheHistory"]
+  },
+  {
+    name:"ask_pcp_name",
+    test: u => /\b(pcP name|primary care.*name|what's your pcp|doctor's name)\b/i.test(u),
+    reply: ()=>`I can get you the exact name after the call.`,
+    collect: ["pcpName"]
+  },
+  {
+    name:"fallback",
+    test: _ => true,
+    reply: ()=>"Could you repeat that another way? I'm still a bit shaken up.",
+    collect: []
+  }
+];
+
+/* ---------- App State ---------- */
+let recognizing = false;
+let recog;
+let muted = false;
+let running = false;
+const collected = {}; // key -> boolean
+
+function speak(text){
+  if(muted) return;
+  const u = new SpeechSynthesisUtterance(text);
+  const voices = speechSynthesis.getVoices();
+  // Try to pick a female English voice if available
+  const v = voices.find(v=>/female/i.test(v.name) && /en/i.test(v.lang)) || voices.find(v=>/en/i.test(v.lang));
+  if(v) u.voice = v;
+  u.rate = 1.0; u.pitch = 1.0;
+  speechSynthesis.speak(u);
+}
+
+function addMsg(role, text){
+  const t = document.getElementById('transcript');
+  const row = document.createElement('div');
+  row.className = `msg ${role}`;
+  row.innerHTML = `<div class="bubble">${text}</div>`;
+  t.appendChild(row);
+  t.scrollTop = t.scrollHeight;
+}
+
+function updateScore(){
+  const s = document.getElementById('score');
+  let filled = 0;
+  const rows = REQUIRED.map(item=>{
+    const ok = !!collected[item.key];
+    if(ok) filled++;
+    return `<div class="row"><div>${item.label}</div><div class="badge ${ok?'good':'bad'}">${ok?'Collected':'Missing'}</div></div>`;
+  }).join("");
+  s.innerHTML = `<div class="row"><strong>Progress</strong><div>${filled}/${REQUIRED.length} collected</div></div>${rows}`;
+}
+
+function startCall(){
+  if(running) return;
+  running = true;
+  document.getElementById('startBtn').disabled = true;
+  document.getElementById('endBtn').disabled = false;
+  document.getElementById('micBtn').disabled = false;
+  document.getElementById('muteBtn').disabled = false;
+  addMsg('sarah', "Hi, this is Sarah. Thanks for taking my call.");
+  speak("Hi, this is Sarah. Thanks for taking my call.");
+  updateScore();
+}
+
+function endCall(){
+  running = false;
+  if(recognizing) toggleMic();
+  addMsg('sarah', "Thank you. I'll await your follow-up text for next steps.");
+  speak("Thank you. I'll await your follow-up text for next steps.");
+  document.getElementById('startBtn').disabled = false;
+  document.getElementById('endBtn').disabled = true;
+  document.getElementById('micBtn').disabled = true;
+  document.getElementById('muteBtn').disabled = true;
+}
+
+function handleUserUtterance(text){
+  if(!text || !running) return;
+  addMsg('maria', text);
+
+  // choose intent
+  const intent = intents.find(i=>i.test(text)) || intents[intents.length-1];
+  const response = intent.reply(text);
+  intent.collect.forEach(k=>collected[k]=true);
+  updateScore();
+
+  setTimeout(()=>{
+    addMsg('sarah', response);
+    speak(response);
+  }, 300);
+}
+
+/* ---------- Keyboard mode ---------- */
+document.getElementById('kbToggle').addEventListener('click', ()=>{
+  const area = document.getElementById('kbArea');
+  area.style.display = area.style.display==='none' ? 'flex' : 'none';
+});
+document.getElementById('sendKb').addEventListener('click', ()=>{
+  const v = document.getElementById('kbInput').value.trim();
+  document.getElementById('kbInput').value = "";
+  handleUserUtterance(v);
+});
+
+/* ---------- Mic Recognition (Web Speech API) ---------- */
+function setupRecog(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) return null;
+  const r = new SR();
+  r.continuous = false; r.interimResults = false; r.lang = 'en-US';
+  r.onresult = (e)=>{
+    const text = e.results[0][0].transcript;
+    handleUserUtterance(text);
+  };
+  r.onend = ()=>{
+    recognizing = false;
+    document.getElementById('micBtn').textContent = "🎙️ Use Microphone";
+  };
+  r.onerror = ()=>{
+    recognizing = false;
+    document.getElementById('micBtn').textContent = "🎙️ Use Microphone";
+  };
+  return r;
+}
+
+function toggleMic(){
+  if(!recog) recog = setupRecog();
+  if(!recog){ alert("SpeechRecognition not supported in this browser. Use the keyboard input."); return; }
+  if(!recognizing){
+    recognizing = true; recog.start();
+    document.getElementById('micBtn').textContent = "⏹️ Stop Mic";
+  }else{
+    recognizing = false; try{recog.stop();}catch(e){}
+    document.getElementById('micBtn').textContent = "🎙️ Use Microphone";
+  }
+}
+
+/* ---------- Controls ---------- */
+document.getElementById('startBtn').addEventListener('click', startCall);
+document.getElementById('endBtn').addEventListener('click', endCall);
+document.getElementById('micBtn').addEventListener('click', toggleMic);
+document.getElementById('muteBtn').addEventListener('click', ()=>{
+  muted = !muted;
+  document.getElementById('muteBtn').textContent = muted ? "🔇 Unmute Sarah" : "🔈 Mute Sarah";
+});
+
+// Initialize score
+updateScore();
+</script>
+</body>
+</html>
